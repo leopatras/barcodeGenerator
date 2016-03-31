@@ -1,6 +1,6 @@
 {
   "name": "cordova-barcode-generator",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Plugin for generate barcode type 128",
   "cordova": {
     "id": "com.attendee.barcodegenerator",
