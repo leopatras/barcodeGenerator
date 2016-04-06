@@ -1,4 +1,4 @@
-package io.cordova.hellocordova;
+package com.attendee.barcodegenerator;
 
 import android.graphics.Bitmap;
 import android.util.Base64;
