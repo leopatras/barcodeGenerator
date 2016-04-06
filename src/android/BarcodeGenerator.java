@@ -1,7 +1,8 @@
-package com.attendee.barcodegenerator;
+package io.cordova.hellocordova;
 
 import android.graphics.Bitmap;
 import android.util.Base64;
+import android.util.Log;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
@@ -27,9 +28,21 @@ public class BarcodeGenerator extends CordovaPlugin {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
 
         if (action.equals("barcodeGenerator")){
+
             String data = args.getString(0);
+            int h = args.getInt(1);
+            int w = args.getInt(2);
+            int color = WHITE;
+            int bgColor = BLACK;
+            if(args.getString(3) != "null"){
+                color = (int) Long.parseLong(args.getString(3),16);
+            }
+            if (args.getString(4) != "null"){
+                bgColor = (int) Long.parseLong(args.getString(4),16);
+            }
+
             try {
-                this.generateBarcode(data, callbackContext);
+                this.generateBarcode(data, h, w, color, bgColor, callbackContext);
             } catch (WriterException e) {
                 e.printStackTrace();
             }
@@ -40,10 +53,10 @@ public class BarcodeGenerator extends CordovaPlugin {
     }
 
 
-    private void generateBarcode(String data ,CallbackContext callbackContext) throws WriterException {
+    private void generateBarcode(String data, int hight, int width, int color, int bgColor, CallbackContext callbackContext) throws WriterException {
         BitMatrix result = null;
         try{
-            result = new MultiFormatWriter().encode(data, BarcodeFormat.CODE_128,300,300,null);
+            result = new MultiFormatWriter().encode(data, BarcodeFormat.CODE_128,width,hight,null);
         } catch (IllegalArgumentException e){
 
         }
@@ -54,7 +67,7 @@ public class BarcodeGenerator extends CordovaPlugin {
         for (int y = 0; y < h; y++) {
             int offset = y * w;
             for (int x = 0; x < w; x++) {
-                pixels[offset + x] = result.get(x, y) ? BLACK : WHITE;
+                pixels[offset + x] = result.get(x, y) ? color : bgColor;
             }
         }
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
