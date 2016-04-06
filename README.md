@@ -2,6 +2,7 @@
 ##Compatible
 
 Android Version <= 4.0
+
 iOS Version >= 8.0
 
 ###This plugin is generate only Barcode type 128
