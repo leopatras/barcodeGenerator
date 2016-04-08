@@ -72,8 +72,10 @@ public class BarcodeGenerator extends CordovaPlugin {
         }
         Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         bitmap.setPixels(pixels, 0, 300, 0, 0, w, h);
+        int cropWidth = w/5;
+        Bitmap resize = Bitmap.createBitmap(bitmap, cropWidth/2, 0,w-cropWidth,h);
 
-        String base64Image =  bitmapToBase64(bitmap);
+        String base64Image =  bitmapToBase64(resize);
 
         if (data!=null && data.length() > 0 && base64Image.length()>0){
             callbackContext.success(base64Image);
