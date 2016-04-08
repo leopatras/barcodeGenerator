@@ -2,53 +2,10 @@
 
 @implementation BarcodeGenerator
 
-- (void)barcodeGenerator:(CDVInvokedUrlCommand *)command
-{
-    NSString *text = [command.arguments objectAtIndex:0]; // Text
-    NSInteger height = [[command.arguments objectAtIndex:1] integerValue]; //Height
-    NSInteger width = [[command.arguments objectAtIndex:2] integerValue]; //Width
-    
-    UIColor *barcodeColor;
-    UIColor *backgroundColor;
-
-    id colorString = [command.arguments objectAtIndex:3]; //Barcode Color
-    barcodeColor = (colorString != [NSNull null])?[self colorWithHexString:colorString]:nil;
-    
-    id backgroundColorString = [command.arguments objectAtIndex:4]; //Background Color
-    backgroundColor = (backgroundColorString != [NSNull null])?[self colorWithHexString:backgroundColorString]:nil;
-    
-
-    __block CDVPluginResult *pluginResult = nil;
-    
-    if (text == nil || [text length] == 0) {
-        
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"text was empty."];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-        
-    } else {
-        
-        NSData *data = [text dataUsingEncoding:NSASCIIStringEncoding];
-        
-        if (data == nil) {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"can't generate barcode."];
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-        } else {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                CIFilter *filter = [CIFilter filterWithName:@"CICode128BarcodeGenerator"];
-                [filter setValue:data forKey:@"inputMessage"];
-                
-                UIImage *img = [self createImageFrom:filter.outputImage size:CGSizeMake(width, height) color:barcodeColor andBackgroundColor:backgroundColor];
-                
-                NSData *imageData = UIImagePNGRepresentation(img);
-                NSString *base64String = [imageData base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
-                
-                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:base64String];
-                
-                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-            });
-        }
-    }
-}
+#pragma mark - Convert HEX to UIColor
+/*
+    Source: http://stackoverflow.com/questions/1560081/how-can-i-create-a-uicolor-from-a-hex-string
+ */
 
 - (UIColor *) colorWithHexString: (NSString *) hexString {
     NSString *colorString = [[hexString stringByReplacingOccurrencesOfString: @"#" withString: @""] uppercaseString];
@@ -79,7 +36,9 @@
             blue  = [self colorComponentFrom: colorString start: 6 length: 2];
             break;
         default:
-            [NSException raise:@"Invalid color value" format: @"Color value %@ is invalid.  It should be a hex value of the form #RBG, #ARGB, #RRGGBB, or #AARRGGBB", hexString];
+            
+            return nil;
+            
             break;
     }
     
@@ -87,6 +46,7 @@
 }
 
 - (CGFloat) colorComponentFrom: (NSString *) string start: (NSUInteger) start length: (NSUInteger) length {
+    
     NSString *substring = [string substringWithRange: NSMakeRange(start, length)];
     NSString *fullHex = length == 2 ? substring : [NSString stringWithFormat: @"%@%@", substring, substring];
     unsigned hexComponent;
@@ -94,85 +54,169 @@
     return hexComponent / 255.0;
 }
 
+#pragma mark - Plugin connector
 
-- (UIImage *)createImageFrom:(CIImage *)image size:(CGSize)size color:(UIColor *)color andBackgroundColor:(UIColor *)backgroundColor {
+- (void)barcodeGenerator:(CDVInvokedUrlCommand *)command
+{
+    UIColor *barcodeColor;
+    UIColor *backgroundColor;
     
-    if (!color) {
-        color = [UIColor blackColor];
+    id textArg = [command.arguments objectAtIndex:0];
+    
+    NSString *text = nil; // Text
+    
+    if (![textArg isKindOfClass:[NSString class]]) {
+        text = [[command.arguments objectAtIndex:0] stringValue];
+    } else {
+        text  = [command.arguments objectAtIndex:0];
     }
     
-    if (!backgroundColor) {
-        backgroundColor = [UIColor whiteColor];
-    }
+    NSInteger height = [[command.arguments objectAtIndex:1] integerValue]; //Height
+    NSInteger width  = [[command.arguments objectAtIndex:2] integerValue]; //Width
+
+    id colorString           = [command.arguments objectAtIndex:3]; //Barcode Color
+    barcodeColor             = (colorString != [NSNull null])?[self colorWithHexString:colorString]:nil;
+
+    id backgroundColorString = [command.arguments objectAtIndex:4]; //Background Color
+    backgroundColor          = (backgroundColorString != [NSNull null])?[self colorWithHexString:backgroundColorString]:nil;
     
-    CGRect extent = CGRectIntegral(image.extent);
-    CGFloat scale = [UIScreen mainScreen].scale;
-    size_t width = size.width * scale;
-    size_t height = size.height * scale;
+    __block CDVPluginResult *pluginResult = nil;
     
-    CIContext *context = [CIContext contextWithOptions:nil];
-    
-    CGImageRef bitmapImage = [context createCGImage:image fromRect:extent];
-    
-    CGImageRef actualMask = CGImageMaskCreate(CGImageGetWidth(bitmapImage),
-                                              CGImageGetHeight(bitmapImage),
-                                              CGImageGetBitsPerComponent(bitmapImage),
-                                              CGImageGetBitsPerPixel(bitmapImage),
-                                              CGImageGetBytesPerRow(bitmapImage),
-                                              CGImageGetDataProvider(bitmapImage),
-                                              NULL, false);
-    
-    CGImageRef imgRef = CGImageCreateWithMask(bitmapImage, actualMask);
-    CGImageRelease(actualMask);
-    CGImageRelease(bitmapImage);
-    
-    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-    CGContextRef ctx = CGBitmapContextCreate(NULL,
-                                             width,
-                                             height,
-                                             8,
-                                             0,
-                                             cs,
-                                             kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
-    CGColorSpaceRelease(cs);
-    
-    CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
-    CGRect rect = CGRectMake(0, 0, width, height);
-    
-    CGContextDrawImage(ctx, rect, imgRef);
-    
-    if (nil != color) {
-        CGContextSetBlendMode(ctx, kCGBlendModeSourceIn);
-        CGContextSetFillColorWithColor(ctx, color.CGColor);
-        CGContextFillRect(ctx, rect);
-    }
-    
-    CGImageRef scaledImage = CGBitmapContextCreateImage(ctx);
-    CGImageRelease(imgRef);
-    CGContextRelease(ctx);
-    
-    UIImage *img = [UIImage imageWithCGImage:scaledImage scale:scale orientation:UIImageOrientationUp];
-    CGImageRelease(scaledImage);
-    
-    CGRect newRect = CGRectMake(0, 0, width, height);
-    
-    UIGraphicsBeginImageContext(newRect.size);
-    CGContextRef newContext = UIGraphicsGetCurrentContext();
-    CGContextSaveGState(newContext);
-    
-    [backgroundColor setFill];
-    
-    CGContextFillRect(newContext, newRect);
-    
-    [img drawInRect:newRect];
-    
-    UIImage *rawImage = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    
-    UIImage *finalImage = [UIImage imageWithCGImage:rawImage.CGImage scale:scale orientation:UIImageOrientationUp];
-    
-    return finalImage;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self createImageFromText:text size:(CGSizeMake(width, height)) color:barcodeColor andBackgroundColor:backgroundColor withCompletion:^(NSString *base64string, NSError *error) {
+            
+            if (error) {
+                
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:error.localizedFailureReason];
+                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+                
+            } else {
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:base64string];
+                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            }
+        }];
+    });
 }
 
+#pragma mark - Generate Barcode
+
+- (UIImage *)createImageFromText:(NSString *)text size:(CGSize)size color:(UIColor *)color andBackgroundColor:(UIColor *)backgroundColor withCompletion:(GenerateBarcodeCompletion)completion {
+    
+    if (text == nil || [text length] == 0) {
+        
+        NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                             code:-1
+                                         userInfo:@{NSLocalizedFailureReasonErrorKey: @"text was empty."}];
+        completion(nil, error);
+        
+    } else {
+        
+        NSData *data = [text dataUsingEncoding:NSASCIIStringEncoding];
+        
+        if (data == nil) {
+            
+            NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                                 code:-1
+                                             userInfo:@{NSLocalizedFailureReasonErrorKey: @"can't generate barcode."}
+                              ];
+            completion(nil, error);
+            
+        } else {
+            
+            CIFilter *filter = [CIFilter filterWithName:@"CICode128BarcodeGenerator"];
+            [filter setValue:data forKey:@"inputMessage"];
+//            [filter setValue:@0 forKey:@"inputQuietSpace"]; //Change white space.
+            
+            if (!color) { //If no color set to Black.
+                color = [UIColor blackColor];
+            }
+            
+            if (!backgroundColor) { //If no color set to White.
+                backgroundColor = [UIColor whiteColor];
+            }
+            
+            CGRect extent = CGRectIntegral(filter.outputImage.extent);
+            CGFloat scale = [UIScreen mainScreen].scale;
+            size_t width = size.width;// * scale;
+            size_t height = size.height;// * scale;
+            
+            CIContext *context = [CIContext contextWithOptions:nil];
+            
+            CGImageRef bitmapImage = [context createCGImage:filter.outputImage fromRect:extent];
+            
+            CGImageRef actualMask = CGImageMaskCreate(CGImageGetWidth(bitmapImage),
+                                                      CGImageGetHeight(bitmapImage),
+                                                      CGImageGetBitsPerComponent(bitmapImage),
+                                                      CGImageGetBitsPerPixel(bitmapImage),
+                                                      CGImageGetBytesPerRow(bitmapImage),
+                                                      CGImageGetDataProvider(bitmapImage),
+                                                      NULL, false);
+            
+            CGImageRef imgRef = CGImageCreateWithMask(bitmapImage, actualMask);
+            CGImageRelease(actualMask);
+            CGImageRelease(bitmapImage);
+            
+            //Generate Barcode Bitmap
+            CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+            CGContextRef ctx = CGBitmapContextCreate(NULL,
+                                                     width,
+                                                     height,
+                                                     8,
+                                                     0,
+                                                     cs,
+                                                     kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+            CGColorSpaceRelease(cs);
+            
+            CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
+            CGRect rect = CGRectMake(0, 0, width, height);
+            
+            CGContextDrawImage(ctx, rect, imgRef);
+            
+            CGContextSetBlendMode(ctx, kCGBlendModeSourceIn);
+            CGContextSetFillColorWithColor(ctx, color.CGColor);
+            CGContextFillRect(ctx, rect);
+            
+            CGImageRef colorImage = CGBitmapContextCreateImage(ctx);
+            CGImageRelease(imgRef);
+            CGContextRelease(ctx);
+            
+            //Generate Barcode Background Bitmap
+            
+            CGColorSpaceRef backgroundcs = CGColorSpaceCreateDeviceRGB();
+            CGContextRef backgroundContextRef = CGBitmapContextCreate(NULL,
+                                                                      width,
+                                                                      height,
+                                                                      8,
+                                                                      0,
+                                                                      backgroundcs,
+                                                                      kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+            
+            CGColorSpaceRelease(backgroundcs);
+            
+            CGContextSetInterpolationQuality(backgroundContextRef, kCGInterpolationNone);
+            
+            CGContextSetFillColorWithColor(backgroundContextRef, backgroundColor.CGColor);
+            CGContextFillRect(backgroundContextRef, rect);
+            
+            CGContextDrawImage(backgroundContextRef, rect, colorImage);
+            
+            CGImageRef scaledImage = CGBitmapContextCreateImage(backgroundContextRef);
+            
+            CGImageRelease(colorImage);
+            CGContextRelease(backgroundContextRef);
+            
+            UIImage *img = [UIImage imageWithCGImage:scaledImage scale:scale orientation:UIImageOrientationUp];
+            CGImageRelease(scaledImage);
+            
+            NSData *imageData = UIImagePNGRepresentation(img);
+            NSString *base64String = [imageData base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength];
+            completion(base64String, nil);
+            
+            return img;
+        }
+    }
+    
+    return nil;
+}
 
 @end
