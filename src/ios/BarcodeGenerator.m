@@ -102,7 +102,15 @@
 
 - (UIImage *)createImageFromText:(NSString *)text size:(CGSize)size color:(UIColor *)color andBackgroundColor:(UIColor *)backgroundColor withCompletion:(GenerateBarcodeCompletion)completion {
     
-    if (text == nil || [text length] == 0) {
+    //Check iOS version more than 8.0 if not can not generate barcode.
+    if (([[[UIDevice currentDevice] systemVersion] compare:@"8.0" options:NSNumericSearch] == NSOrderedAscending)) {
+        
+        NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                             code:-1
+                                         userInfo:@{NSLocalizedFailureReasonErrorKey: @"can't generate barcode."}];
+        completion(nil, error);
+        
+    } else if (text == nil || [text length] == 0) {
         
         NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
                                              code:-1
